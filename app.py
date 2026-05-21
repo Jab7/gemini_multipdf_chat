@@ -95,7 +95,7 @@ def get_vector_store(text_chunks):
 
     except Exception as e:
 
-        st.error(f"Error processing the PDF: {str(e)}")
+        st.error(f"Error processing PDF: {str(e)}")
 
         print(f"Embedding Error: {e}")
 
@@ -103,10 +103,67 @@ def get_vector_store(text_chunks):
 
 
 # ==========================================
+# AUTO SELECT GEMINI MODEL
+# ==========================================
+
+def get_available_model():
+
+    try:
+
+        models = genai.list_models()
+
+        available_models = []
+
+        for m in models:
+
+            if "generateContent" in m.supported_generation_methods:
+
+                available_models.append(m.name)
+
+        st.sidebar.write("Available Models:")
+        st.sidebar.write(available_models)
+
+        # Prefer flash models
+        for model_name in available_models:
+
+            if "flash" in model_name.lower():
+
+                cleaned_name = model_name.replace("models/", "")
+
+                st.sidebar.success(f"Using: {cleaned_name}")
+
+                return cleaned_name
+
+        # Fallback
+        if available_models:
+
+            cleaned_name = available_models[0].replace("models/", "")
+
+            st.sidebar.success(f"Using: {cleaned_name}")
+
+            return cleaned_name
+
+        st.error("No Gemini models available.")
+
+        return None
+
+    except Exception as e:
+
+        st.error(f"Model detection failed: {str(e)}")
+
+        return None
+
+
+# ==========================================
 # GEMINI QA CHAIN
 # ==========================================
 
 def get_conversational_chain():
+
+    selected_model = get_available_model()
+
+    if not selected_model:
+        return None
 
     prompt_template = """
     Answer the question as detailed as possible from the provided context.
@@ -128,7 +185,7 @@ def get_conversational_chain():
     """
 
     model = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
+        model=selected_model,
         google_api_key=GOOGLE_API_KEY,
         temperature=0.3
     )
@@ -183,6 +240,12 @@ def user_input(user_question):
 
         chain = get_conversational_chain()
 
+        if chain is None:
+
+            return {
+                "output_text": "No Gemini model available."
+            }
+
         response = chain(
             {
                 "input_documents": docs,
@@ -221,10 +284,18 @@ def user_input(user_question):
 
     except Exception as e:
 
-        print(f"Unexpected error: {e}")
+        error_message = str(e)
+
+        print(f"Unexpected error: {error_message}")
+
+        if "429" in error_message:
+
+            return {
+                "output_text": "Gemini API quota exceeded. Try again later or use another API key."
+            }
 
         return {
-            "output_text": f"Unexpected error: {str(e)}"
+            "output_text": f"Unexpected error: {error_message}"
         }
 
 
@@ -269,6 +340,7 @@ def main():
                     success = get_vector_store(text_chunks)
 
                     if success:
+
                         st.success("PDFs processed successfully!")
 
             else:
