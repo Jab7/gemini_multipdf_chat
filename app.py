@@ -20,9 +20,9 @@ from google.generativeai.types import (
     IncompleteIterationError,
 )
 
-# =========================
+# ==========================================
 # CONFIG
-# =========================
+# ==========================================
 
 load_dotenv()
 
@@ -30,17 +30,20 @@ GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
-# =========================
-# PDF TEXT EXTRACTION
-# =========================
+# ==========================================
+# READ PDF TEXT
+# ==========================================
 
 def get_pdf_text(pdf_docs):
+
     text = ""
 
     for pdf in pdf_docs:
+
         pdf_reader = PdfReader(pdf)
 
         for page in pdf_reader.pages:
+
             extracted_text = page.extract_text()
 
             if extracted_text:
@@ -49,11 +52,12 @@ def get_pdf_text(pdf_docs):
     return text
 
 
-# =========================
-# TEXT CHUNKING
-# =========================
+# ==========================================
+# SPLIT TEXT INTO CHUNKS
+# ==========================================
 
 def get_text_chunks(text):
+
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=10000,
         chunk_overlap=1000
@@ -64,9 +68,9 @@ def get_text_chunks(text):
     return chunks
 
 
-# =========================
-# VECTOR STORE
-# =========================
+# ==========================================
+# CREATE VECTOR STORE
+# ==========================================
 
 def get_vector_store(text_chunks):
 
@@ -75,6 +79,7 @@ def get_vector_store(text_chunks):
         return False
 
     try:
+
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
@@ -89,15 +94,17 @@ def get_vector_store(text_chunks):
         return True
 
     except Exception as e:
+
         st.error(f"Error processing the PDF: {str(e)}")
+
         print(f"Embedding Error: {e}")
 
         return False
 
 
-# =========================
-# CONVERSATIONAL CHAIN
-# =========================
+# ==========================================
+# GEMINI QA CHAIN
+# ==========================================
 
 def get_conversational_chain():
 
@@ -121,7 +128,7 @@ def get_conversational_chain():
     """
 
     model = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model="models/gemini-2.0-flash",
         google_api_key=GOOGLE_API_KEY,
         temperature=0.3
     )
@@ -140,9 +147,9 @@ def get_conversational_chain():
     return chain
 
 
-# =========================
+# ==========================================
 # CLEAR CHAT
-# =========================
+# ==========================================
 
 def clear_chat_history():
 
@@ -154,13 +161,14 @@ def clear_chat_history():
     ]
 
 
-# =========================
+# ==========================================
 # USER INPUT
-# =========================
+# ==========================================
 
 def user_input(user_question):
 
     try:
+
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
@@ -220,9 +228,9 @@ def user_input(user_question):
         }
 
 
-# =========================
+# ==========================================
 # MAIN APP
-# =========================
+# ==========================================
 
 def main():
 
@@ -235,9 +243,9 @@ def main():
 
     st.write("Upload PDFs and ask questions.")
 
-    # =========================
+    # ==========================================
     # SIDEBAR
-    # =========================
+    # ==========================================
 
     with st.sidebar:
 
@@ -256,7 +264,7 @@ def main():
 
                     raw_text = get_pdf_text(pdf_docs)
 
-                    mtext_chunks = get_text_chunks(raw_text)
+                    text_chunks = get_text_chunks(raw_text)
 
                     success = get_vector_store(text_chunks)
 
@@ -264,6 +272,7 @@ def main():
                         st.success("PDFs processed successfully!")
 
             else:
+
                 st.error("Please upload at least one PDF.")
 
         st.button(
@@ -271,9 +280,9 @@ def main():
             on_click=clear_chat_history
         )
 
-    # =========================
+    # ==========================================
     # CHAT HISTORY
-    # =========================
+    # ==========================================
 
     if "messages" not in st.session_state:
 
@@ -290,9 +299,9 @@ def main():
 
             st.write(message["content"])
 
-    # =========================
-    # USER PROMPT
-    # =========================
+    # ==========================================
+    # USER QUESTION
+    # ==========================================
 
     user_question = st.chat_input("Ask a question from PDFs")
 
@@ -330,9 +339,10 @@ def main():
                 )
 
 
-# =========================
+# ==========================================
 # RUN APP
-# =========================
+# ==========================================
 
 if __name__ == "__main__":
+
     main()
