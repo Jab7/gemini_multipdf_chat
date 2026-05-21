@@ -10,15 +10,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_classic.chains.question_answering import load_qa_chain
 from langchain_core.prompts import PromptTemplate
-
-from google.generativeai.types import (
-    BlockedPromptException,
-    StopCandidateException,
-    BrokenResponseError,
-    IncompleteIterationError,
-)
 
 # ==========================================
 # CONFIG
@@ -47,6 +39,7 @@ def get_pdf_text(pdf_docs):
             extracted_text = page.extract_text()
 
             if extracted_text:
+
                 text += extracted_text
 
     return text
@@ -59,8 +52,8 @@ def get_pdf_text(pdf_docs):
 def get_text_chunks(text):
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=10000,
-        chunk_overlap=1000
+        chunk_size=1000,
+        chunk_overlap=200
     )
 
     chunks = text_splitter.split_text(text)
@@ -73,10 +66,6 @@ def get_text_chunks(text):
 # ==========================================
 
 def get_vector_store(text_chunks):
-
-    if not text_chunks:
-        st.error("No text chunks found.")
-        return False
 
     try:
 
@@ -96,8 +85,6 @@ def get_vector_store(text_chunks):
     except Exception as e:
 
         st.error(f"Error processing PDF: {str(e)}")
-
-        print(f"Embedding Error: {e}")
 
         return False
 
@@ -123,7 +110,7 @@ def get_available_model():
         st.sidebar.write("Available Models:")
         st.sidebar.write(available_models)
 
-        # Prefer flash models
+        # Prefer flash model
         for model_name in available_models:
 
             if "flash" in model_name.lower():
@@ -143,8 +130,6 @@ def get_available_model():
 
             return cleaned_name
 
-        st.error("No Gemini models available.")
-
         return None
 
     except Exception as e:
@@ -155,7 +140,7 @@ def get_available_model():
 
 
 # ==========================================
-# GEMINI QA CHAIN
+# CREATE PROMPT + MODEL CHAIN
 # ==========================================
 
 def get_conversational_chain():
@@ -163,17 +148,17 @@ def get_conversational_chain():
     selected_model = get_available_model()
 
     if not selected_model:
+
         return None
 
     prompt_template = """
-    Answer the question as detailed as possible from the provided context.
+    You are a helpful AI assistant.
 
-    If the answer is not available in the provided context,
-    just say:
+    Answer the user's question ONLY from the provided context.
 
-    "answer is not available in the context"
-
-    Do not provide incorrect answers.
+    If answer is not available in context,
+    say:
+    "Answer is not available in the provided PDF."
 
     Context:
     {context}
@@ -184,28 +169,25 @@ def get_conversational_chain():
     Answer:
     """
 
+    prompt = PromptTemplate(
+        template=prompt_template,
+        input_variables=["context", "question"]
+    )
+
     model = ChatGoogleGenerativeAI(
         model=selected_model,
         google_api_key=GOOGLE_API_KEY,
         temperature=0.3
     )
 
-    prompt = PromptTemplate(
-        template=prompt_template,
-        input_variables=["context", "question"]
-    )
-
-    chain = load_qa_chain(
-        llm=model,
-        chain_type="stuff",
-        prompt=prompt
-    )
+    # Modern LCEL chain
+    chain = prompt | model
 
     return chain
 
 
 # ==========================================
-# CLEAR CHAT
+# CLEAR CHAT HISTORY
 # ==========================================
 
 def clear_chat_history():
@@ -213,13 +195,13 @@ def clear_chat_history():
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Upload PDFs and ask me questions."
+            "content": "Upload PDFs and ask questions."
         }
     ]
 
 
 # ==========================================
-# USER INPUT
+# USER QUERY HANDLING
 # ==========================================
 
 def user_input(user_question):
@@ -230,13 +212,27 @@ def user_input(user_question):
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
 
-        new_db = FAISS.load_local(
+        db = FAISS.load_local(
             "faiss_index",
             embeddings,
             allow_dangerous_deserialization=True
         )
 
-        docs = new_db.similarity_search(user_question)
+        docs = db.similarity_search(
+            user_question,
+            k=4
+        )
+
+        if not docs:
+
+            return {
+                "output_text": "No relevant content found in PDFs."
+            }
+
+        # Build context manually
+        context = "\n\n".join(
+            [doc.page_content for doc in docs]
+        )
 
         chain = get_conversational_chain()
 
@@ -246,52 +242,36 @@ def user_input(user_question):
                 "output_text": "No Gemini model available."
             }
 
-        response = chain(
+        response = chain.invoke(
             {
-                "input_documents": docs,
+                "context": context,
                 "question": user_question
-            },
-            return_only_outputs=True
+            }
         )
 
-        print(response)
+        # Extract response safely
+        if hasattr(response, "content"):
 
-        return response
+            output_text = response.content
 
-    except BlockedPromptException as e:
+        else:
 
-        print(f"Prompt blocked: {e}")
-
-        return {
-            "output_text": "Request blocked by Gemini safety filters."
-        }
-
-    except StopCandidateException as e:
-
-        print(f"Response stopped: {e}")
+            output_text = str(response)
 
         return {
-            "output_text": "Response stopped due to safety concerns."
-        }
-
-    except (BrokenResponseError, IncompleteIterationError) as e:
-
-        print(f"Response error: {e}")
-
-        return {
-            "output_text": "Error while generating response."
+            "output_text": output_text
         }
 
     except Exception as e:
 
         error_message = str(e)
 
-        print(f"Unexpected error: {error_message}")
+        print(f"Error: {error_message}")
 
         if "429" in error_message:
 
             return {
-                "output_text": "Gemini API quota exceeded. Try again later or use another API key."
+                "output_text": "Gemini API quota exceeded. Try again later."
             }
 
         return {
@@ -310,7 +290,7 @@ def main():
         page_icon="🤖"
     )
 
-    st.title("Chat with PDF using Gemini 🤖")
+    st.title("Chat with PDFs using Gemini 🤖")
 
     st.write("Upload PDFs and ask questions.")
 
@@ -361,7 +341,7 @@ def main():
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Upload PDFs and ask me questions."
+                "content": "Upload PDFs and ask questions."
             }
         ]
 
@@ -375,7 +355,9 @@ def main():
     # USER QUESTION
     # ==========================================
 
-    user_question = st.chat_input("Ask a question from PDFs")
+    user_question = st.chat_input(
+        "Ask a question from PDFs"
+    )
 
     if user_question:
 
