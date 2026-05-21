@@ -121,7 +121,7 @@ def get_conversational_chain():
     """
 
     model = ChatGoogleGenerativeAI(
-        model="gemini-1.5-flash",
+        model="gemini-2.0-flash",
         google_api_key=GOOGLE_API_KEY,
         temperature=0.3
     )
@@ -256,7 +256,7 @@ def main():
 
                     raw_text = get_pdf_text(pdf_docs)
 
-                    text_chunks = get_text_chunks(raw_text)
+                    mtext_chunks = get_text_chunks(raw_text)
 
                     success = get_vector_store(text_chunks)
 
