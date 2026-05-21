@@ -1,7 +1,7 @@
 import os
 from PyPDF2 import PdfReader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 import streamlit as st
 import google.generativeai as genai
 from google.generativeai.types import (
@@ -49,16 +49,15 @@ def get_vector_store(chunks):
         return False
 
     try:
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
-            google_api_key=GOOGLE_API_KEY
-        )
+        embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
 
-        vector_store = FAISS.from_texts(
-            chunks,
-            embedding=embeddings
-        )
-
+vector_store = FAISS.from_texts(
+    chunks,
+    embedding=embeddings
+)
+        
         vector_store.save_local("faiss_index")
         return True
 
@@ -80,10 +79,11 @@ def get_conversational_chain():
     Answer:
     """
 
-    model = ChatGoogleGenerativeAI(model="gemini-pro",
-                                   client=genai,
-                                   temperature=0.3,
-                                   )
+   model = ChatGoogleGenerativeAI(
+    model="gemini-1.5-flash",
+    google_api_key=GOOGLE_API_KEY,
+    temperature=0.3
+)
     prompt = PromptTemplate(template=prompt_template,
                             input_variables=["context", "question"])
     chain = load_qa_chain(llm=model, chain_type="stuff", prompt=prompt)
@@ -97,10 +97,9 @@ def clear_chat_history():
 
 def user_input(user_question):
     try:
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
-            google_api_key=GOOGLE_API_KEY
-        )
+     embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
 
         new_db = FAISS.load_local(
             "faiss_index",
