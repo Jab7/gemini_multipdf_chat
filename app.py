@@ -17,8 +17,10 @@ from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
 
 load_dotenv()
-os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+
+genai.configure(api_key=GOOGLE_API_KEY)
 
 # read all pdf files and return text
 
@@ -48,8 +50,10 @@ def get_vector_store(chunks):
         st.error("No text chunks to process. The PDF might be empty or unreadable.")
         return False
     try:
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001")  # type: ignore
+        GoogleGenerativeAIEmbeddings(
+    model="models/embedding-001",
+    google_api_key=GOOGLE_API_KEY
+) # type: ignore
         vector_store = FAISS.from_texts(chunks, embedding=embeddings)
         vector_store.save_local("faiss_index")
         return True
