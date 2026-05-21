@@ -50,7 +50,7 @@ def get_vector_store(chunks):
 
     try:
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/text-embedding-004",
             google_api_key=GOOGLE_API_KEY
         )
 
@@ -98,7 +98,7 @@ def clear_chat_history():
 def user_input(user_question):
     try:
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/text-embedding-004",
             google_api_key=GOOGLE_API_KEY
         )
 
