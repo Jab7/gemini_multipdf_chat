@@ -43,28 +43,31 @@ def get_text_chunks(text):
     return chunks  # list of strings
 
 # get embeddings for each chunk
-
-
 def get_vector_store(chunks):
     if not chunks:
-        st.error("No text chunks to process. The PDF might be empty or unreadable.")
+        st.error("No text chunks to process.")
         return False
+
     try:
-        GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
-    google_api_key=GOOGLE_API_KEY
-) # type: ignore
-        vector_store = FAISS.from_texts(chunks, embedding=embeddings)
+        embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001",
+            google_api_key=GOOGLE_API_KEY
+        )
+
+        vector_store = FAISS.from_texts(
+            chunks,
+            embedding=embeddings
+        )
+
         vector_store.save_local("faiss_index")
         return True
-    except BlockedPromptException as e:
-        st.error("The PDF content was flagged by Google's safety filters. Please try a different document.")
-        print(f"Embedding blocked: {e}")
-        return False
+
     except Exception as e:
         st.error(f"Error processing the PDF: {str(e)}")
-        print(f"Embedding error: {e}")
         return False
+    
+
+
 
 
 def get_conversational_chain():
@@ -95,30 +98,51 @@ def clear_chat_history():
 def user_input(user_question):
     try:
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001")  # type: ignore
+            model="models/embedding-001",
+            google_api_key=GOOGLE_API_KEY
+        )
 
-        new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True) 
+        new_db = FAISS.load_local(
+            "faiss_index",
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+
         docs = new_db.similarity_search(user_question)
 
         chain = get_conversational_chain()
 
         response = chain(
-            {"input_documents": docs, "question": user_question}, return_only_outputs=True, )
+            {"input_documents": docs, "question": user_question},
+            return_only_outputs=True,
+        )
 
         print(response)
         return response
+
     except BlockedPromptException as e:
         print(f"Prompt was blocked by Gemini: {e}")
-        return {"output_text": "I'm sorry, but I cannot process this request. The content was flagged by Google's safety filters. Please try rephrasing your question."}
+        return {
+            "output_text": "I'm sorry, but I cannot process this request."
+        }
+
     except StopCandidateException as e:
         print(f"Response generation was stopped: {e}")
-        return {"output_text": "I'm sorry, but the response generation was stopped due to content safety concerns. Please try rephrasing your question."}
+        return {
+            "output_text": "Response generation stopped due to safety concerns."
+        }
+
     except (BrokenResponseError, IncompleteIterationError) as e:
         print(f"Response error: {e}")
-        return {"output_text": "I'm sorry, but I encountered an error while generating the response. Please try again."}
+        return {
+            "output_text": "I encountered an error while generating the response."
+        }
+
     except Exception as e:
         print(f"Unexpected error: {e}")
-        return {"output_text": f"An unexpected error occurred: {str(e)}. Please try again."}
+        return {
+            "output_text": f"An unexpected error occurred: {str(e)}"
+        }
 
 
 def main():
