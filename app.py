@@ -50,19 +50,21 @@ def get_vector_store(chunks):
 
     try:
         embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
 
-vector_store = FAISS.from_texts(
-    chunks,
-    embedding=embeddings
-)
-        
+        vector_store = FAISS.from_texts(
+            chunks,
+            embedding=embeddings
+        )
+
         vector_store.save_local("faiss_index")
+
         return True
 
     except Exception as e:
         st.error(f"Error processing the PDF: {str(e)}")
+        print(f"Embedding error: {e}")
         return False
     
 
